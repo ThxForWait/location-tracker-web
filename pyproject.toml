@@ -1,0 +1,16 @@
+[project]
+name = "albion-tracker-map"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=6.1.2",
+]
+
+[project.scripts]
+albion-tracker-map = "albion_tracker_map:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"

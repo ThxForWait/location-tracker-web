@@ -1,0 +1,4 @@
+-e file:///home/kkostin/PyProjects/albion-tracker-map
+asgiref==3.12.1
+django==6.1.2
+sqlparse==0.6.0

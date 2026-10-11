@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>Граф переходов</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0e1116;
+            color: #e6edf3;
+            overflow: hidden;
+        }
+        #graph { position: absolute; inset: 0; }
+
+        .panel {
+            background: rgba(22, 27, 34, 0.92);
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            z-index: 20;
+        }
+
+        .stats {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            padding: 10px 14px;
+            font-size: 12px;
+            color: #8b949e;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .stats .title {
+            display: block;
+            color: #e6edf3;
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+        .stats b { color: #e6edf3; font-weight: 600; }
+
+        .legend {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            padding: 10px 14px;
+            font-size: 12px;
+            pointer-events: none;
+        }
+        .legend-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: #c9d1d9; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .dot-outlined { border: 2px solid #ffffff; }
+
+        .controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .ctrl-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: rgba(22, 27, 34, 0.92);
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .ctrl-btn:hover { background: #21262d; border-color: #58a6ff; }
+        .ctrl-btn:active { transform: scale(0.95); }
+
+        div.vis-tooltip {
+            background: #161b22 !important;
+            border: 1px solid #30363d !important;
+            color: #e6edf3 !important;
+            border-radius: 6px !important;
+            padding: 8px 12px !important;
+            font-family: inherit !important;
+            font-size: 12px !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="graph"></div>
+
+    <div class="panel stats">
+        <span class="title">⚔ Граф переходов</span>
+        Узлов: <b id="stat-nodes">0</b> · Переходов: <b id="stat-edges">0</b>
+    </div>
+
+    <div class="controls">
+        <button id="btn-fit" class="ctrl-btn" title="Показать весь граф">⛶</button>
+    </div>
+
+    <div class="panel legend">
+        <div class="legend-row"><span class="dot" style="background:#3b82f6"></span> Blue</div>
+        <div class="legend-row"><span class="dot" style="background:#f2d24b"></span> Yellow</div>
+        <div class="legend-row"><span class="dot" style="background:#e53935"></span> Red</div>
+        <div class="legend-row"><span class="dot dot-outlined" style="background:#000000"></span> Black</div>
+        <div class="legend-row"><span class="dot" style="background:#a371f7"></span> Tunnel (TNL)</div>
+    </div>
+
+    <script>
+        const groups   = {{ groups_json|safe }};
+        const rawEdges = {{ edges_json|safe }};
+
+        // Бэкенд отдаёт: top = black, middle = TNL, bottom = safe/yellow/red
+        // Пользователь просит: чёрные СПРАВА, safe/yellow/red СЛЕВА, TNL между ними.
+        const LEFT_X  = -1700;   // bottom (safe/yellow/red)
+        const RIGHT_X =  1700;   // top (black)
+
+        // Внутренний разброс по X для колонок (лёгкое «дыхание», чтобы узлы
+        // не вставали в идеальную линию)
+        const COLUMN_SPREAD = 0;
+
+        // Границы «коридора» для туннелей
+        const TUNNEL_MARGIN = 350;
+        const TUNNEL_MIN_X  = LEFT_X  + TUNNEL_MARGIN;
+        const TUNNEL_MAX_X  = RIGHT_X - TUNNEL_MARGIN;
+
+        const COLORS = {
+            safe:   { bg: "#3b82f6", border: "#1d4ed8" },
+            yellow: { bg: "#f2d24b", border: "#b39616" },
+            red:    { bg: "#e53935", border: "#8e1a17" },
+            black:  { bg: "#000000", border: "#ffffff" },
+            tunnel: { bg: "#a371f7", border: "#6d43b8" },
+            missing:{ bg: "#484f58", border: "#6e7681" },
+        };
+
+        function hashStr(s) {
+            let h = 2166136261;
+            for (let i = 0; i < s.length; i++) {
+                h ^= s.charCodeAt(i);
+                h = Math.imul(h, 16777619);
+            }
+            return h >>> 0;
+        }
+        function jitter01(id) { return (hashStr(String(id)) % 10000) / 10000; }
+
+        function colorOf(n, band) {
+            if (band === "middle") return COLORS.tunnel;
+            if (band === "top")    return COLORS.black;
+            return COLORS[n.pvpType] || COLORS.safe;
+        }
+
+        // ---- Строим узлы ----
+        const allNodes   = [];
+        const bandById   = {};   // id -> band
+        const tunnelIds  = [];
+
+        for (const band of ["top", "middle", "bottom"]) {
+            for (const n of groups[band] || []) {
+                const c    = colorOf(n, band);
+                const size = 10 + (n.tier || 1) * 2;
+                const jy   = jitter01(n.id + ":y");
+
+                let x, fixedX;
+                if (band === "middle") {
+                    // TNL — полностью свободны, стартуют в коридоре
+                    const jx = jitter01(n.id + ":x");
+                    x = jx * (TUNNEL_MAX_X - TUNNEL_MIN_X) + TUNNEL_MIN_X;
+                    fixedX = false;
+                    tunnelIds.push(n.id);
+                } else {
+                    // Левые / правые — X зафиксирован, лёгкий разброс внутри колонки
+                    const base = (band === "top") ? RIGHT_X : LEFT_X;
+                    const jx = jitter01(n.id + ":x");
+                    x = base + (jx * 2 - 1) * COLUMN_SPREAD;
+                    fixedX = true;
+                }
+
+                const y = (jy * 2 - 1) * 1800;
+
+                bandById[n.id] = band;
+
+                allNodes.push({
+                    id: n.id,
+                    label: n.label,
+                    title: `<b>${n.label}</b><br>id: ${n.id}` +
+                           `<br>tier: ${n.tier ?? "—"}` +
+                           `<br>pvp: ${n.pvpType ?? "—"}`,
+                    shape: "dot",
+                    size,
+                    borderWidth: 2,
+                    color: {
+                        background: c.bg,
+                        border: c.border,
+                        highlight: { background: c.bg, border: c.border },
+                        hover:     { background: c.bg, border: c.border },
+                    },
+                    font: { color: "#e6edf3", size: 12 },
+                    x, y,
+                    // top и bottom — X жёстко прибит; middle — полностью свободен
+                    fixed: { x: fixedX, y: false },
+                });
+            }
+        }
+
+        // ---- Ребра ----
+        const ONE_HOUR_MS = 60 * 60 * 1000;
+
+        function plural(n, one, few, many) {
+            const m10 = n % 10, m100 = n % 100;
+            if (m10 === 1 && m100 !== 11) return one;
+            if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+            return many;
+        }
+        function formatRemaining(ms) {
+            if (ms <= 0) return "0 минут";
+            const totalMin = Math.floor(ms / 60000);
+            const hours    = Math.floor(totalMin / 60);
+            const minutes  = totalMin % 60;
+            const hPart = hours > 0 ? `${hours} ${plural(hours, "час", "часа", "часов")}` : "";
+            const mPart = `${minutes} ${plural(minutes, "минута", "минуты", "минут")}`;
+            return hPart ? `${hPart} ${mPart}` : mPart;
+        }
+        function edgeStyleFor(expiresMs) {
+            const remaining = expiresMs - Date.now();
+            const soon = remaining < ONE_HOUR_MS;
+            return {
+                label: formatRemaining(remaining),
+                labelColor: soon ? "#ff2d2d" : "#ffffff",
+                lineColor:  soon ? "rgba(255, 45, 45, 0.85)" : "#4a5260",
+            };
+        }
+
+        const edgesData = rawEdges.map(e => {
+            const expiresMs = new Date(e.expiresAt).getTime();
+            const st = edgeStyleFor(expiresMs);
+            return {
+                id: e.id,
+                from: e.from,
+                to: e.to,
+                label: st.label,
+                title: `Истекает: ${new Date(e.expiresAt).toLocaleString()}`,
+                arrows: { to: { enabled: false } },
+                color: { color: st.lineColor, highlight: "#58a6ff", hover: "#8b949e", inherit: false },
+                font: { color: st.labelColor, size: 12, strokeWidth: 3, strokeColor: "#0e1116", align: "middle" },
+                width: 1.5,
+                smooth: { enabled: true, type: "continuous", roundness: 0.25 },
+                _expiresMs: expiresMs,
+            };
+        });
+
+        document.getElementById("stat-nodes").textContent = allNodes.length;
+        document.getElementById("stat-edges").textContent = edgesData.length;
+
+        const nodesDS = new vis.DataSet(allNodes);
+        const edgesDS = new vis.DataSet(edgesData);
+        const container = document.getElementById("graph");
+
+        const options = {
+            layout: { improvedLayout: false },
+            physics: {
+                enabled: true,
+                solver: "barnesHut",
+                barnesHut: {
+                    gravitationalConstant: -14000,
+                    centralGravity: 0,
+                    springLength: 200,
+                    springConstant: 0.015,
+                    damping: 0.9,
+                    avoidOverlap: 1.0,
+                },
+                stabilization: { enabled: true, iterations: 700, fit: true },
+            },
+            interaction: {
+                hover: true,
+                tooltipDelay: 120,
+                navigationButtons: false,
+                keyboard: { enabled: true, bindToWindow: false },
+                multiselect: true,
+                zoomSpeed: 0.6,
+            },
+        };
+
+        const network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, options);
+
+        // ---------- Ограничения и границы ----------
+        const BOUNDS_PADDING = 200;   // сколько можно «выглянуть» за пределы bbox
+        let bounds   = null;
+        let minScale = 0;
+        let enforcing = false;
+
+        // Пружины тянут TNL к своим соседям — после стабилизации подчищаем
+        // те, что всё-таки ушли в колонки. Y не трогаем, только X.
+        function clampTunnelsX() {
+            const positions = network.getPositions(tunnelIds);
+            const updates = [];
+            for (const id of tunnelIds) {
+                const p = positions[id];
+                if (!p) continue;
+                let newX = p.x;
+                if (newX < TUNNEL_MIN_X) newX = TUNNEL_MIN_X;
+                if (newX > TUNNEL_MAX_X) newX = TUNNEL_MAX_X;
+                if (newX !== p.x) updates.push({ id, x: newX, y: p.y });
+            }
+            if (updates.length) nodesDS.update(updates);
+        }
+
+        // Границы графа — по фактическим позициям узлов
+        function computeBounds() {
+            const positions = network.getPositions();
+            let minX =  Infinity, maxX = -Infinity;
+            let minY =  Infinity, maxY = -Infinity;
+            let any = false;
+            for (const id in positions) {
+                const p = positions[id];
+                if (!p) continue;
+                any = true;
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.y > maxY) maxY = p.y;
+            }
+            if (!any) { bounds = null; return; }
+            bounds = {
+                minX: minX - BOUNDS_PADDING,
+                maxX: maxX + BOUNDS_PADDING,
+                minY: minY - BOUNDS_PADDING,
+                maxY: maxY + BOUNDS_PADDING,
+            };
+        }
+
+        // Держим видимую область внутри bounds
+        function clampView() {
+            if (!bounds || enforcing) return;
+            const pos   = network.getViewPosition();
+            const scale = network.getScale();
+            const halfW = container.clientWidth  / (2 * scale);
+            const halfH = container.clientHeight / (2 * scale);
+
+            const minCX = bounds.minX + halfW;
+            const maxCX = bounds.maxX - halfW;
+            const minCY = bounds.minY + halfH;
+            const maxCY = bounds.maxY - halfH;
+
+            let newX = pos.x, newY = pos.y;
+            if (minCX <= maxCX) newX = Math.max(minCX, Math.min(maxCX, pos.x));
+            else                newX = (bounds.minX + bounds.maxX) / 2;
+            if (minCY <= maxCY) newY = Math.max(minCY, Math.min(maxCY, pos.y));
+            else                newY = (bounds.minY + bounds.maxY) / 2;
+
+            if (Math.abs(newX - pos.x) > 0.5 || Math.abs(newY - pos.y) > 0.5) {
+                enforcing = true;
+                network.moveTo({ position: { x: newX, y: newY }, scale, animation: false });
+                setTimeout(() => { enforcing = false; }, 0);
+            }
+        }
+
+        // После fit запоминаем масштаб как «минимально допустимый» (мельче — нельзя)
+        function fitAndLockScale() {
+            network.fit({ animation: false });
+            // Чуть-чуть отдаляемся, чтобы узлы не липли к краям
+            const s = network.getScale() * 0.92;
+            network.moveTo({ scale: s, animation: false });
+            minScale = network.getScale();
+            computeBounds();
+            clampView();
+        }
+
+        // ---- События ----
+        network.once("stabilizationIterationsDone", () => {
+            // Выключаем физику — иначе узлы будут «дышать» после каждого события
+            network.setOptions({ physics: { enabled: false } });
+            clampTunnelsX();
+            fitAndLockScale();
+        });
+
+        network.on("dragging", () => { clampView(); });
+        network.on("zoom", (params) => {
+            if (enforcing) return;
+            if (minScale > 0 && params.scale < minScale - 0.0001) {
+                enforcing = true;
+                network.moveTo({ scale: minScale, animation: false });
+                setTimeout(() => { enforcing = false; }, 0);
+                return;
+            }
+            clampView();
+        });
+
+        // Реакция на перетаскивание узла — клампим туннели, обновляем границы
+        network.on("dragEnd", (params) => {
+            if (params.nodes.length === 1) {
+                const id = params.nodes[0];
+                if (bandById[id] === "middle") {
+                    const p = network.getPositions([id])[id];
+                    if (p) {
+                        let newX = p.x;
+                        if (newX < TUNNEL_MIN_X) newX = TUNNEL_MIN_X;
+                        if (newX > TUNNEL_MAX_X) newX = TUNNEL_MAX_X;
+                        if (newX !== p.x) nodesDS.update({ id, x: newX, y: p.y });
+                    }
+                }
+            }
+            computeBounds();
+            clampView();
+        });
+
+        // Кнопка «показать весь граф»
+        document.getElementById("btn-fit").addEventListener("click", () => {
+            network.fit({ animation: { duration: 400 } });
+            setTimeout(() => {
+                // после fit заново фиксируем minScale, чтобы zoom-out не откатывался назад
+                const prevScale = network.getScale();
+                const prevPos   = network.getViewPosition();
+                network.fit({ animation: false });
+                const fitScale = network.getScale();
+                network.moveTo({ position: prevPos, scale: prevScale, animation: false });
+                minScale = fitScale;
+                computeBounds();
+                clampView();
+            }, 420);
+        });
+
+        window.addEventListener("resize", () => {
+            computeBounds();
+            clampView();
+        });
+
+        // ---- Раз в минуту обновляем таймеры ----
+        setInterval(() => {
+            const updates = edgesDS.get().map(e => {
+                const st = edgeStyleFor(e._expiresMs);
+                return {
+                    id: e.id,
+                    label: st.label,
+                    color: { color: st.lineColor, highlight: "#58a6ff", hover: "#8b949e", inherit: false },
+                    font:  { color: st.labelColor, size: 12, strokeWidth: 3, strokeColor: "#0e1116", align: "middle" },
+                };
+            });
+            if (updates.length) edgesDS.update(updates);
+        }, 60 * 1000);
+    </script>
+</body>
+</html>
