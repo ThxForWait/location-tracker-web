@@ -83,10 +83,12 @@ def _handle_connect(data: dict) -> JsonResponse:
     if not(_is_tunnel(source_id)) and not(_is_tunnel(target_id)):
         return _err("edge must involve TNL zones",
                     source_id=source_id, target_id=target_id)
+
+    norm_source, norm_target = Edge.normalize(source_id, target_id)
     # 4. Создаём ребро
     edge = Edge.objects.create(
-        source_id=source_id,
-        target_id=target_id,
+        source_id=norm_source,
+        target_id=norm_target,
         created_at=created_at,
         expires_at=expires_at,
     )

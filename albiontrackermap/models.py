@@ -19,6 +19,11 @@ class Edge(models.Model):
     def is_alive(self) -> bool:
         return self.expires_at > timezone.now()
 
+    @staticmethod
+    def normalize(a: str, b: str) -> tuple[str, str]:
+        """Возвращает отсортированную пару. Источник — меньший ID."""
+        return (a, b) if a <= b else (b, a)
+
     def __str__(self):
         return f"{self.source_id} → {self.target_id} (до {self.expires_at:%H:%M})"
 
