@@ -62,7 +62,8 @@ def _handle_connect(data: dict) -> JsonResponse:
 
     source_id = str(source_id)
     target_id = str(target_id)
-
+    if source_id == target_id:
+        return _err("ids is the same", vertex_id=source_id, status=404)
     # 2. Вершины должны существовать в zones.json
     if get_zone(source_id) is None:
         return _err("unknown source vertex", vertex_id=source_id, status=404)
