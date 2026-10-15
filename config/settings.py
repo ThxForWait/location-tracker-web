@@ -59,7 +59,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'albiontrackermap'
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.discord',
+    'albiontrackermap',
 ]
 
 MIDDLEWARE = [
@@ -70,6 +74,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -148,3 +153,41 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+
+# Вход на сайт — только через Discord (django-allauth)
+# https://docs.allauth.org/en/latest/socialaccount/providers/discord.html
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',  # вход в /admin по паролю
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+DISCORD_CLIENT_ID = os.environ.get('DISCORD_CLIENT_ID', '')
+DISCORD_CLIENT_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
+
+SOCIALACCOUNT_PROVIDERS = {
+    'discord': {
+        'APPS': [
+            {'client_id': DISCORD_CLIENT_ID, 'secret': DISCORD_CLIENT_SECRET},
+        ] if DISCORD_CLIENT_ID else [],
+        'SCOPE': ['identify'],
+    },
+}
+SOCIALACCOUNT_ONLY = True
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+SOCIALACCOUNT_STORE_TOKENS = False
+
+LOGIN_URL = 'account_login'
+LOGIN_REDIRECT_URL = 'devices'
+ACCOUNT_LOGOUT_REDIRECT_URL = 'map'
+
+
+# Трекер: токены устройств и вход через браузер
+
+# Discord-аккаунт моложе этого не получает токен (защита от одноразовых аккаунтов)
+DISCORD_MIN_ACCOUNT_AGE_DAYS = int(os.environ.get('DISCORD_MIN_ACCOUNT_AGE_DAYS', '30'))
+# Сколько живёт код входа через браузер
+DEVICE_CODE_TTL_SECONDS = 600
+# Как часто клиент опрашивает сервер, ожидая подтверждения
+DEVICE_CODE_POLL_INTERVAL_SECONDS = 3

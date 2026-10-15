@@ -1,0 +1,22 @@
+{% extends "trackermap/base.html" %}
+{% block title %}Подключение трекера{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Подключение трекера</h1>
+    {% if approved %}
+        <p class="ok">Готово! Трекер подключён к аккаунту {{ player }}.</p>
+        <p>Можно закрыть эту вкладку и вернуться к трекеру.</p>
+    {% elif denial %}
+        <p class="error">{{ denial }}</p>
+    {% else %}
+        <p>Проверьте, что код совпадает с тем, что показывает трекер, и нажмите «Подтвердить».</p>
+        <form method="post">
+            {% csrf_token %}
+            <input type="text" name="code" value="{{ code }}" maxlength="7" autocomplete="off" required>
+            <button type="submit">Подтвердить</button>
+        </form>
+        {% if error %}<p class="error">{{ error }}</p>{% endif %}
+        <p class="muted">Подтверждайте код, только если сами запустили трекер на своём компьютере.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -17,10 +17,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from albiontrackermap import account_views
 from albiontrackermap.api_v1 import api as api_v1
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', api_v1.urls),
+    path('accounts/', include('allauth.urls')),
+    path('link/', account_views.link, name='link'),
+    path('account/devices/', account_views.devices, name='devices'),
     path('map/', include('albiontrackermap.urls'))
 ]

@@ -1,0 +1,34 @@
+{% extends "trackermap/base.html" %}
+{% block title %}Мои устройства{% endblock %}
+{% block content %}
+<div class="panel">
+    <h1>Мои устройства</h1>
+    {% if not player %}
+        <p class="error">Войдите через Discord, чтобы подключать трекер.</p>
+    {% else %}
+        <p>Аккаунт: <b>{{ player }}</b>{% if player.banned %} — <span class="error">заблокирован</span>{% endif %}</p>
+        {% if tokens %}
+        <table>
+            <tr><th>Устройство</th><th>Версия</th><th>Подключено</th><th>Последняя активность</th><th></th></tr>
+            {% for t in tokens %}
+            <tr>
+                <td>{{ t.name|default:"Без имени" }}</td>
+                <td class="muted">{{ t.client_version|default:"—" }}</td>
+                <td class="muted">{{ t.created_at|date:"d.m.Y H:i" }}</td>
+                <td class="muted">{{ t.last_used_at|date:"d.m.Y H:i"|default:"—" }}</td>
+                <td>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="revoke" value="{{ t.pk }}">
+                        <button type="submit" class="danger">Отключить</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+            <p class="muted">Подключённых трекеров пока нет. Запустите трекер — он сам откроет страницу подключения.</p>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

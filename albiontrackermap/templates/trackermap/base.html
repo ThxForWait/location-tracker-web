@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Albion Tracker{% endblock %}</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0e1116;
+            color: #e6edf3;
+        }
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 20px; border-bottom: 1px solid #30363d;
+        }
+        header a { color: #e6edf3; text-decoration: none; margin-left: 16px; }
+        main { max-width: 640px; margin: 32px auto; padding: 0 16px; }
+        .panel {
+            background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+            padding: 20px; margin-bottom: 16px;
+        }
+        h1 { font-size: 22px; margin: 0 0 16px; }
+        p { line-height: 1.5; color: #c9d1d9; }
+        input[type=text] {
+            font-size: 22px; letter-spacing: 3px; text-transform: uppercase;
+            padding: 8px 12px; width: 180px; text-align: center;
+            background: #0e1116; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px;
+        }
+        button {
+            font-size: 15px; padding: 8px 16px; border-radius: 6px; cursor: pointer;
+            border: 1px solid #2ea043; background: #238636; color: #fff;
+        }
+        button.danger { border-color: #da3633; background: transparent; color: #f85149; }
+        .error { color: #f85149; }
+        .ok { color: #3fb950; }
+        table { width: 100%; border-collapse: collapse; }
+        td, th { padding: 8px 4px; border-bottom: 1px solid #30363d; text-align: left; font-size: 14px; }
+        .muted { color: #8b949e; }
+    </style>
+</head>
+<body>
+<header>
+    <a href="{% url 'map' %}" style="margin-left:0"><b>Albion Tracker</b></a>
+    <nav>
+        {% if user.is_authenticated %}
+            <a href="{% url 'devices' %}">Мои устройства</a>
+            <form method="post" action="{% url 'account_logout' %}" style="display:inline">
+                {% csrf_token %}
+                <button type="submit" class="danger" style="margin-left:16px">Выйти</button>
+            </form>
+        {% else %}
+            <a href="{% url 'account_login' %}">Войти через Discord</a>
+        {% endif %}
+    </nav>
+</header>
+<main>
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>
