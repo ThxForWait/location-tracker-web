@@ -1,4 +1,3 @@
-import json
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -64,36 +63,6 @@ class StaticEdgeTests(TestCase):
         self.assertFalse(created2)
         self.assertEqual(StaticEdge.objects.count(), 1)
         self.assertEqual(EdgeReport.objects.count(), 2)
-
-
-class LegacyEndpointTests(TestCase):
-    url = "/map/api/packet/"
-
-    def post(self, payload):
-        return self.client.post(self.url, json.dumps(payload), content_type="application/json")
-
-    def test_connect_twice_gives_one_edge(self):
-        now = timezone.now().replace(microsecond=0)
-        payload = {
-            "command": 1,
-            "source_id": "TNL-001",
-            "target_id": "TNL-002",
-            "created_at": now.isoformat(),
-            "expires_at": (now + timedelta(hours=2)).isoformat(),
-        }
-        r1 = self.post(payload)
-        r2 = self.post(payload)
-        self.assertEqual(r1.status_code, 201)
-        self.assertEqual(r2.status_code, 200)
-        self.assertEqual(r1.json()["edge_id"], r2.json()["edge_id"])
-        self.assertEqual(Edge.objects.get().confirmations, 2)
-        self.assertEqual(EdgeReport.objects.filter(player__isnull=True).count(), 2)
-
-    def test_static_edge(self):
-        payload = {"command": 2, "source_id": "1000", "target_id": "1006",
-                   "created_at": timezone.now().isoformat()}
-        self.assertEqual(self.post(payload).status_code, 201)
-        self.assertEqual(self.post(payload).status_code, 200)
 
 
 class HealthTests(TestCase):

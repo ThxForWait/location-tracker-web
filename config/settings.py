@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -191,3 +192,41 @@ DISCORD_MIN_ACCOUNT_AGE_DAYS = int(os.environ.get('DISCORD_MIN_ACCOUNT_AGE_DAYS'
 DEVICE_CODE_TTL_SECONDS = 600
 # Как часто клиент опрашивает сервер, ожидая подтверждения
 DEVICE_CODE_POLL_INTERVAL_SECONDS = 3
+
+# Минимальная версия клиента: более старым API отвечает 426 «обновите трекер»
+TRACKER_MIN_CLIENT_VERSION = os.environ.get('TRACKER_MIN_CLIENT_VERSION', '0.0.0')
+
+
+# Лимиты запросов (уровень 2). Формат «число/период», период: s, m, h, d.
+# Счётчики лежат в общем кеше, чтобы работать при нескольких процессах сервера.
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache',  # создаётся командой createcachetable
+    },
+}
+
+TRACKER_RATE_EDGES_PER_MINUTE = '20/m'   # отчёты о переходах, на один токен
+TRACKER_RATE_EDGES_PER_HOUR = '300/h'
+TRACKER_RATE_DEVICE_START = '10/m'      # начало входа через браузер, на один IP
+TRACKER_RATE_DEVICE_POLL = '40/m'       # ожидание подтверждения, на один IP
+
+
+# Проверки правдоподобия (уровень 3)
+
+# Насколько created_at может быть в будущем (расхождение часов клиента)
+TRACKER_MAX_CLOCK_SKEW = timedelta(seconds=30)
+# Переход старше этого отклоняется
+TRACKER_MAX_REPORT_AGE = timedelta(minutes=5)
+# Максимальное время жизни портала Авалона
+TRACKER_MAX_PORTAL_LIFETIME = timedelta(hours=4)
+# Быстрее этого между двумя переходами одного игрока — подозрительно
+TRACKER_MIN_TRANSITION_INTERVAL = timedelta(seconds=5)
+# Если прошлый переход был раньше, разрыв пути не считается подозрительным
+# (игрок мог перезапустить трекер или пройти через инстанс)
+TRACKER_PATH_GAP_WINDOW = timedelta(minutes=30)
+# Больше стольких живых выходов у зоны дорог — подозрительно
+TRACKER_MAX_ROAD_EXITS = 8
+# Граф статичных переходов законсервирован: принимаются только рёбра-эталоны
+TRACKER_STATIC_GRAPH_FROZEN = env_bool('TRACKER_STATIC_GRAPH_FROZEN', False)
