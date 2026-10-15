@@ -15,13 +15,21 @@ from django.db.models import QuerySet
 from django.utils import timezone
 
 from .models import Edge, EdgeStatus
-from .zones import ZoneKind, get_zone_kind, load_zones
+from .zones import ZoneKind, city_zone_ids, get_zone_kind, load_zones
 
 
 def edges_alive_at(at: datetime | None = None) -> QuerySet[Edge]:
-    """Рёбра, живые в момент `at` (по умолчанию — сейчас)."""
+    """Рёбра, живые в момент `at` (по умолчанию — сейчас).
+
+    Рёбра с городами (могли попасть в базу до запрета) на картах не показываются.
+    """
     moment = at or timezone.now()
-    return Edge.objects.filter(created_at__lte=moment, expires_at__gt=moment)
+    cities = city_zone_ids()
+    return (
+        Edge.objects.filter(created_at__lte=moment, expires_at__gt=moment)
+        .exclude(source_id__in=cities)
+        .exclude(target_id__in=cities)
+    )
 
 
 def public_edges(at: datetime | None = None) -> QuerySet[Edge]:

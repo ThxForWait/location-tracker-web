@@ -78,6 +78,10 @@ def _check_zones(source_id: str, target_id: str) -> None:
     for zone_id in (source_id, target_id):
         if get_zone(zone_id) is None:
             raise Rejection(422, "unknown_zone", f"Неизвестная зона {zone_id}")
+    for zone_id in (source_id, target_id):
+        if get_zone_kind(zone_id) == ZoneKind.CITY:
+            raise Rejection(422, "city_zone",
+                            f"Переходы с участием городов не учитываются ({zone_id})")
 
 
 def _check_time(created_at: datetime) -> None:

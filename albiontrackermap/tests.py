@@ -57,8 +57,8 @@ class DynamicEdgeTests(TestCase):
 class StaticEdgeTests(TestCase):
     def test_idempotent_and_reported(self):
         now = timezone.now()
-        _, created1 = register_static_edge("1006", "1000", now)
-        _, created2 = register_static_edge("1000", "1006", now)
+        _, created1 = register_static_edge("1006", "3356", now)
+        _, created2 = register_static_edge("3356", "1006", now)
         self.assertTrue(created1)
         self.assertFalse(created2)
         self.assertEqual(StaticEdge.objects.count(), 1)

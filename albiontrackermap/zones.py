@@ -13,10 +13,33 @@ class ZoneKind(str, Enum):
     """
     # Всё, что не узел карты: данжи, острова, хайдауты, арены, Мгла, неизвестные ID
     INSTANCE = "instance"
-    # Постоянная зона открытого мира (города, открытые зоны, проходы)
+    # Города и всё, что к ним относится: банки, рынки, порталы городов в чёрной
+    # зоне, Карлеон, Брисилиен. Переходы с ними не учитываются вообще.
+    CITY = "city"
+    # Постоянная зона открытого мира (открытые зоны, проходы, перекрёстки)
     STATIC = "static"
     # Зона Дорог Авалона (TNL-*)
     ROAD = "road"
+
+
+# Типы городских зон (поле type в zones.json)
+CITY_ZONE_TYPES = frozenset({
+    # Королевские города и их банки/рынки
+    "PLAYERCITY_SAFEAREA_01",
+    "PLAYERCITY_SAFEAREA_02",
+    "PLAYERCITY_SAFEAREA_NOFURNITURE",
+    # Порталы королевских городов в чёрной зоне («Fort Sterling Portal» и т.п.)
+    "PLAYERCITY_BLACK_PORTALCITY_NOFURNITURE",
+    # Карлеон, его банк, рынки и зал славы
+    "PLAYERCITY_BLACK_ROYAL",
+    "PLAYERCITY_BLACK_ROYAL_NOFURNITURE",
+    "PLAYERCITY_BLACK_ROYAL_NOFURNITURE_HALL_OF_FAME",
+    # Брисилиен, его банк и рынок
+    "PLAYERCITY_BLACK",
+    "PLAYERCITY_BLACK_NOFURNITURE",
+    # Логово антиквара внутри городов
+    "PLAYERCITY_HELLDEN",
+})
 
 
 @lru_cache(maxsize=1)
@@ -33,9 +56,10 @@ def get_zone(zone_id: str) -> dict | None:
 def classify_zone_type(zone_type: str) -> ZoneKind:
     if zone_type.startswith("TUNNEL_"):
         return ZoneKind.ROAD
+    if zone_type in CITY_ZONE_TYPES:
+        return ZoneKind.CITY
     if (
-        zone_type.startswith(("OPENPVP_", "PASSAGE_"))
-        or (zone_type.startswith("PLAYERCITY_") and "HALL_OF_FAME" not in zone_type)
+        zone_type.startswith(("OPENPVP_", "PASSAGE_", "PLAYERCITY_"))
         or zone_type in ("STARTINGCITY", "SAFEAREA", "STARTAREA")
     ):
         return ZoneKind.STATIC
@@ -48,3 +72,10 @@ def get_zone_kind(zone_id: str) -> ZoneKind:
     if zone is None:
         return ZoneKind.INSTANCE
     return classify_zone_type(zone.get("type", ""))
+
+
+@lru_cache(maxsize=1)
+def city_zone_ids() -> frozenset[str]:
+    """ID всех городских зон — чтобы убрать их с карты одним запросом."""
+    return frozenset(zone_id for zone_id, zone in load_zones().items()
+                     if classify_zone_type(zone.get("type", "")) == ZoneKind.CITY)

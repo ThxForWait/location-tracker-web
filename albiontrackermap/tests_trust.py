@@ -125,6 +125,12 @@ class MapsModuleTests(TestCase):
         self.assertEqual([e["from"] for e in data["edges"]], ["TNL-001"])
         self.assertEqual({n["id"] for n in data["groups"]["middle"]}, {"TNL-001", "TNL-002"})
 
+    def test_city_edges_hidden_from_map(self):
+        now = timezone.now()
+        Edge.objects.create(source_id="4301", target_id="TNL-001", created_at=now, last_seen=now,
+                            expires_at=now + timedelta(hours=1), status=EdgeStatus.CONFIRMED)
+        self.assertEqual(self.client.get("/map/").context["graph"]["edges"], [])
+
     def test_edges_alive_at_moment(self):
         from .maps import edges_alive_at
 

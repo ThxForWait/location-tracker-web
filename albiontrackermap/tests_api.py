@@ -46,7 +46,10 @@ class ZoneKindTests(TestCase):
     def test_same_as_client(self):
         self.assertEqual(get_zone_kind("TNL-001"), ZoneKind.ROAD)
         self.assertEqual(get_zone_kind("3356"), ZoneKind.STATIC)
-        self.assertEqual(get_zone_kind("1000"), ZoneKind.STATIC)
+        self.assertEqual(get_zone_kind("1006"), ZoneKind.STATIC)
+        self.assertEqual(get_zone_kind("0008"), ZoneKind.STATIC)  # Morgana's Rest
+        for city in ("1000", "1001", "4301", "3003", "3006", "5000", "5002", "1000-HellDen"):
+            self.assertEqual(get_zone_kind(city), ZoneKind.CITY, city)
         self.assertEqual(get_zone_kind("ISLAND-PLAYER-0001a"), ZoneKind.INSTANCE)
         self.assertEqual(get_zone_kind("@HIDEOUT@4356@abc"), ZoneKind.INSTANCE)
 
@@ -70,9 +73,9 @@ class EdgeEndpointTests(ApiTestCase):
         self.assertIsNotNone(report.token)
 
     def test_static_idempotent(self):
-        self.assertEqual(self.static("1000", "1006").status_code, 201)
+        self.assertEqual(self.static("3356", "1006").status_code, 201)
         # Второй отчёт через 10 секунд, чтобы не сработала проверка скорости
-        self.assertEqual(self.static("1006", "1000", timezone.now() + timedelta(seconds=10)).status_code, 200)
+        self.assertEqual(self.static("1006", "3356", timezone.now() + timedelta(seconds=10)).status_code, 200)
         self.assertEqual(StaticEdge.objects.count(), 1)
 
     def test_requires_token(self):
@@ -127,9 +130,16 @@ class RejectionTests(ApiTestCase):
         self.assert_rejected(self.dynamic("TNL-001", "TNL-001"), 422, "same_zone")
 
     def test_wrong_kind(self):
-        self.assert_rejected(self.dynamic("1000", "1006"), 422, "wrong_kind")
-        self.assert_rejected(self.static("TNL-001", "1000"), 422, "wrong_kind")
+        self.assert_rejected(self.dynamic("3356", "1006"), 422, "wrong_kind")
+        self.assert_rejected(self.static("TNL-001", "3356"), 422, "wrong_kind")
         self.assert_rejected(self.dynamic("TNL-001", "ISLAND-PLAYER-0001a"), 422, "wrong_kind")
+
+    def test_city_zones(self):
+        # Город, его банк и портал в чёрной зоне — ничего не строим
+        self.assert_rejected(self.dynamic("TNL-001", "4301"), 422, "city_zone")
+        self.assert_rejected(self.static("1000", "1006"), 422, "city_zone")
+        self.assert_rejected(self.static("1001", "1000"), 422, "city_zone")
+        self.assertFalse(StaticEdge.objects.exists())
 
     def test_time_window(self):
         now = timezone.now()
@@ -148,11 +158,11 @@ class RejectionTests(ApiTestCase):
 
     @override_settings(TRACKER_STATIC_GRAPH_FROZEN=True)
     def test_frozen_static_graph(self):
-        self.assert_rejected(self.static("1000", "1006"), 409, "not_in_reference")
+        self.assert_rejected(self.static("3356", "1006"), 409, "not_in_reference")
         self.assertFalse(StaticEdge.objects.exists())
 
-        StaticEdge.objects.create(source_id="1000", target_id="1006", is_reference=True)
-        self.assertEqual(self.static("1006", "1000").status_code, 200)
+        StaticEdge.objects.create(source_id="1006", target_id="3356", is_reference=True)
+        self.assertEqual(self.static("1006", "3356").status_code, 200)
 
 
 class SuspiciousTests(ApiTestCase):
