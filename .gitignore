@@ -9,3 +9,10 @@ wheels/
 # Virtual environments
 .venv
 .idea
+
+# Инструкции для Claude Code (локальные)
+CLAUDE.md
+
+# Локальные секреты и база
+.env
+db.sqlite3
