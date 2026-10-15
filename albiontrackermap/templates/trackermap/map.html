@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <title>Граф переходов</title>
+    <title>{{ map_title }} — Albion Tracker</title>
     <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -42,6 +42,12 @@
             margin-bottom: 6px;
         }
         .stats b { color: #e6edf3; font-weight: 600; }
+        /* Переключение карт: общая, а позже личная и пулы */
+        .map-nav { margin-top: 8px; pointer-events: auto; }
+        .map-nav a { color: #58a6ff; text-decoration: none; margin-right: 10px; }
+        .map-nav a.active { color: #e6edf3; font-weight: 600; }
+        .line-sample { width: 22px; border-top: 2px solid #8b949e; flex-shrink: 0; }
+        .line-sample.dashed { border-top-style: dashed; }
 
         .legend {
             position: absolute;
@@ -98,8 +104,16 @@
     <div id="graph"></div>
 
     <div class="panel stats">
-        <span class="title">⚔ Граф переходов</span>
+        <span class="title">⚔ {{ map_title }}</span>
         Узлов: <b id="stat-nodes">0</b> · Переходов: <b id="stat-edges">0</b>
+        <div class="map-nav">
+            <a href="{% url 'map' %}" {% if map_kind == "public" %}class="active"{% endif %}>Общая карта</a>
+            {% if user.is_authenticated %}
+                <a href="{% url 'devices' %}">Мои устройства</a>
+            {% else %}
+                <a href="{% url 'account_login' %}">Войти через Discord</a>
+            {% endif %}
+        </div>
     </div>
 
     <div class="controls">
@@ -112,11 +126,16 @@
         <div class="legend-row"><span class="dot" style="background:#e53935"></span> Red</div>
         <div class="legend-row"><span class="dot dot-outlined" style="background:#000000"></span> Black</div>
         <div class="legend-row"><span class="dot" style="background:#a371f7"></span> Tunnel (TNL)</div>
+        <div class="legend-row"><span class="line-sample"></span> Подтверждено</div>
+        <div class="legend-row"><span class="line-sample dashed"></span> Не подтверждено</div>
     </div>
 
+    {{ graph|json_script:"graph-data" }}
     <script>
-        const groups   = {{ groups_json|safe }};
-        const rawEdges = {{ edges_json|safe }};
+        // Данные карты (одинаковый формат для всех карт, см. maps.build_graph)
+        const graph    = JSON.parse(document.getElementById("graph-data").textContent);
+        const groups   = graph.groups;
+        const rawEdges = graph.edges;
 
         // Бэкенд отдаёт: top = black, middle = TNL, bottom = safe/yellow/red
         // Пользователь просит: чёрные СПРАВА, safe/yellow/red СЛЕВА, TNL между ними.
@@ -247,8 +266,7 @@
                 to: e.to,
                 label: st.label,
                 title: `Истекает: ${new Date(e.expiresAt).toLocaleString()}` +
-                       (e.confirmed ? "" : "
-Не подтверждено другими игроками"),
+                       (e.confirmed ? "" : " · не подтверждено другими игроками"),
                 // Неподтверждённое ребро — пунктиром
                 dashes: !e.confirmed,
                 arrows: { to: { enabled: false } },

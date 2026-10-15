@@ -113,3 +113,24 @@ class MapTests(TestCase):
                             last_seen=now, expires_at=now + timedelta(hours=1),
                             status=EdgeStatus.CONFIRMED)
         self.assertContains(self.client.get("/map/"), '"confirmed": true')
+
+
+class MapsModuleTests(TestCase):
+    def test_graph_data_is_valid_json(self):
+        report(make_discord_player("alice"), "1.1.1.1")
+        r = self.client.get("/map/")
+        self.assertContains(r, 'id="graph-data"')
+        self.assertContains(r, "<title>Общая карта")
+        data = r.context["graph"]
+        self.assertEqual([e["from"] for e in data["edges"]], ["TNL-001"])
+        self.assertEqual({n["id"] for n in data["groups"]["middle"]}, {"TNL-001", "TNL-002"})
+
+    def test_edges_alive_at_moment(self):
+        from .maps import edges_alive_at
+
+        now = timezone.now()
+        Edge.objects.create(source_id="TNL-001", target_id="TNL-002",
+                            created_at=now - timedelta(days=2), last_seen=now - timedelta(days=2),
+                            expires_at=now - timedelta(days=2) + timedelta(hours=2))
+        self.assertEqual(edges_alive_at().count(), 0)
+        self.assertEqual(edges_alive_at(now - timedelta(days=2) + timedelta(hours=1)).count(), 1)
