@@ -5,7 +5,7 @@ from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .models import Edge, StaticEdge
+from .edges import register_dynamic_edge, register_static_edge
 from .zones import get_zone
 
 
@@ -27,6 +27,10 @@ def _err(message: str, status: int = 400, **extra) -> JsonResponse:
     return JsonResponse(payload, status=status)
 
 
+def _client_ip(request: HttpRequest) -> str | None:
+    return request.META.get("REMOTE_ADDR") or None
+
+
 def _parse_iso(value) -> datetime | None:
     """ISO 8601 → aware datetime. Принимаем и 'Z', и '+00:00'."""
     if not isinstance(value, str):
@@ -44,7 +48,7 @@ def _parse_iso(value) -> datetime | None:
 
 # --- Хендлеры --------------------------------------------------------------
 
-def _handle_connect(data: dict) -> JsonResponse:
+def _handle_connect(request: HttpRequest, data: dict) -> JsonResponse:
     source_id = data.get("source_id")
     target_id = data.get("target_id")
     created_raw = data.get("created_at")
@@ -85,13 +89,10 @@ def _handle_connect(data: dict) -> JsonResponse:
         return _err("edge must involve TNL zones",
                     source_id=source_id, target_id=target_id)
 
-    norm_source, norm_target = Edge.normalize(source_id, target_id)
-    # 4. Создаём ребро
-    edge = Edge.objects.create(
-        source_id=norm_source,
-        target_id=norm_target,
-        created_at=created_at,
-        expires_at=expires_at,
+    # 4. Создаём ребро или подтверждаем уже живое
+    edge, created = register_dynamic_edge(
+        source_id, target_id, created_at, expires_at,
+        report_meta={"ip": _client_ip(request)},
     )
 
     return JsonResponse({
@@ -102,9 +103,9 @@ def _handle_connect(data: dict) -> JsonResponse:
         "target_id": edge.target_id,
         "created_at": edge.created_at.isoformat(),
         "expires_at": edge.expires_at.isoformat(),
-    }, status=201)
+    }, status=201 if created else 200)
 
-def _handle_static_edge(data: dict) -> JsonResponse:
+def _handle_static_edge(request: HttpRequest, data: dict) -> JsonResponse:
     source_id = data.get("source_id")
     target_id = data.get("target_id")
     created_raw = data.get("created_at")
@@ -134,13 +135,10 @@ def _handle_static_edge(data: dict) -> JsonResponse:
     if created_at is None:
         return _err("invalid created_at", value=created_raw)
 
-    #нормализуем пару
-    norm_source, norm_target = StaticEdge.normalize(source_id, target_id)
     # Идемпотентно
-    edge, created = StaticEdge.objects.get_or_create(
-        source_id=norm_source,
-        target_id=norm_target,
-        defaults={"created_at": created_at},
+    edge, created = register_static_edge(
+        source_id, target_id, created_at,
+        report_meta={"ip": _client_ip(request)},
     )
 
     return JsonResponse({
@@ -185,4 +183,4 @@ def api_packet(request: HttpRequest) -> JsonResponse:
         return _err("unknown command", command=command, status=400)
 
     # 3. Отдаём в хендлер
-    return handler(data)
+    return handler(request, data)
