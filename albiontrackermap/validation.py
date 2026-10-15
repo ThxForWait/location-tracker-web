@@ -12,6 +12,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
+from . import trust
 from .models import Edge, EdgeKind, EdgeReport, Player, ReportStatus, StaticEdge
 from .zones import ZoneKind, get_zone, get_zone_kind
 
@@ -132,3 +133,4 @@ def save_rejected(player: Player, token, ip: str | None, kind: EdgeKind, source_
         created_at=created_at, expires_at=expires_at,
         status=ReportStatus.REJECTED, reasons=[rejection.code],
     )
+    trust.penalize(player, ReportStatus.REJECTED)

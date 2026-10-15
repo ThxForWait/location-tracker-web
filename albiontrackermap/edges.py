@@ -4,13 +4,14 @@
 - динамическое ребро — агрегат, повторный отчёт о живом портале
   добавляет подтверждение, а не создаёт дубль;
 - статичное ребро идемпотентно.
-Подтверждение рёбер и доверие к игрокам (фаза 6) будут добавлены сюда же.
+После каждого отчёта пересчитываются статус ребра и доверие к игроку (trust.py).
 """
 from datetime import datetime
 
 from django.db import transaction
 from django.utils import timezone
 
+from . import trust
 from .models import Edge, EdgeKind, EdgeReport, Player, StaticEdge
 
 
@@ -58,7 +59,7 @@ def register_dynamic_edge(
             edge.reporters_count += 1
         edge.save()
 
-    EdgeReport.objects.create(
+    report = EdgeReport.objects.create(
         player=player,
         kind=EdgeKind.DYNAMIC,
         source_id=source_id,
@@ -68,6 +69,8 @@ def register_dynamic_edge(
         edge=edge,
         **(report_meta or {}),
     )
+    trust.penalize(player, report.status)
+    trust.refresh_edge_status(edge, report)
     return edge, created
 
 
@@ -87,7 +90,7 @@ def register_static_edge(
         target_id=norm_target,
         defaults={"created_at": created_at},
     )
-    EdgeReport.objects.create(
+    report = EdgeReport.objects.create(
         player=player,
         kind=EdgeKind.STATIC,
         source_id=source_id,
@@ -96,4 +99,5 @@ def register_static_edge(
         static_edge=edge,
         **(report_meta or {}),
     )
+    trust.penalize(player, report.status)
     return edge, created

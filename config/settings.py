@@ -230,3 +230,19 @@ TRACKER_PATH_GAP_WINDOW = timedelta(minutes=30)
 TRACKER_MAX_ROAD_EXITS = 8
 # Граф статичных переходов законсервирован: принимаются только рёбра-эталоны
 TRACKER_STATIC_GRAPH_FROZEN = env_bool('TRACKER_STATIC_GRAPH_FROZEN', False)
+
+
+# Доверие и подтверждение рёбер (уровень 4), см. albiontrackermap/trust.py
+
+# Сколько независимых игроков нужно, чтобы ребро стало подтверждённым
+TRACKER_CONFIRMATIONS_REQUIRED = 2
+# С таким доверием игрок подтверждает ребро в одиночку
+TRACKER_TRUST_RELIABLE = 10.0
+# Ниже — карантин: отчёты не влияют на карту
+TRACKER_TRUST_QUARANTINE = -5.0
+TRACKER_TRUST_MIN = -20.0
+TRACKER_TRUST_MAX = 50.0
+# +за подтверждение ребра другим игроком, −за подозрительный и отклонённый отчёт
+TRACKER_TRUST_CONFIRM_BONUS = 1.0
+TRACKER_TRUST_SUSPICIOUS_PENALTY = 0.5
+TRACKER_TRUST_REJECTED_PENALTY = 1.0

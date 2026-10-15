@@ -2,7 +2,7 @@ import json
 from django.shortcuts import render
 from django.utils import timezone
 
-from .models import Edge
+from .models import Edge, EdgeStatus
 from .zones import load_zones
 
 
@@ -18,7 +18,8 @@ def _band_for(zone_id: str, zone: dict | None) -> str:
 
 def graph_view(request):
     zones = load_zones()
-    edges_qs = Edge.objects.filter(expires_at__gt=timezone.now())
+    # Спорные рёбра (о них сообщали только игроки в карантине) не показываем
+    edges_qs = Edge.objects.filter(expires_at__gt=timezone.now()).exclude(status=EdgeStatus.DISPUTED)
 
     used_ids = set()
     for e in edges_qs:
@@ -44,6 +45,7 @@ def graph_view(request):
             "from": e.source_id,
             "to": e.target_id,
             "expiresAt": e.expires_at.isoformat(),
+            "confirmed": e.status == EdgeStatus.CONFIRMED,
         }
         for e in edges_qs
     ]

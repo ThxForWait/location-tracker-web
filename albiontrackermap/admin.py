@@ -43,7 +43,7 @@ class PlayerAdmin(admin.ModelAdmin):
     list_filter = ("is_trusted", "banned")
     search_fields = ("discord_username", "discord_id", "user__username")
     inlines = (DeviceTokenInline,)
-    actions = ("ban", "unban", "mark_trusted", "revoke_tokens")
+    actions = ("ban", "unban", "mark_trusted", "reset_trust", "revoke_tokens")
 
     @admin.action(description="Забанить")
     def ban(self, request, queryset):
@@ -56,6 +56,10 @@ class PlayerAdmin(admin.ModelAdmin):
     @admin.action(description="Сделать доверенным")
     def mark_trusted(self, request, queryset):
         queryset.update(is_trusted=True)
+
+    @admin.action(description="Сбросить доверие в 0 (снять карантин)")
+    def reset_trust(self, request, queryset):
+        queryset.update(trust=0.0)
 
     @admin.action(description="Отозвать все токены")
     def revoke_tokens(self, request, queryset):

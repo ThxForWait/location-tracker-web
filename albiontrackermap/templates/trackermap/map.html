@@ -246,7 +246,11 @@
                 from: e.from,
                 to: e.to,
                 label: st.label,
-                title: `Истекает: ${new Date(e.expiresAt).toLocaleString()}`,
+                title: `Истекает: ${new Date(e.expiresAt).toLocaleString()}` +
+                       (e.confirmed ? "" : "
+Не подтверждено другими игроками"),
+                // Неподтверждённое ребро — пунктиром
+                dashes: !e.confirmed,
                 arrows: { to: { enabled: false } },
                 color: { color: st.lineColor, highlight: "#58a6ff", hover: "#8b949e", inherit: false },
                 font: { color: st.labelColor, size: 12, strokeWidth: 3, strokeColor: "#0e1116", align: "middle" },
